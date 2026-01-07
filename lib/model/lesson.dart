@@ -23,7 +23,7 @@ class Lesson {
       title: json['title'] ?? '',
       words: int.tryParse(json['total_words'].toString()) ?? 0,
       level: json['level_name'] ?? '',
-      icon: Icons.check_circle,
+      icon: Icons.translate,
     );
   }
 }

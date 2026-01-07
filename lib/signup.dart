@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:studyvocabulary/home.dart';
 import 'package:studyvocabulary/login.dart';
 import 'package:studyvocabulary/service/api.dart';
 
@@ -12,6 +11,7 @@ class Signup extends StatefulWidget {
 
 class _SignupState extends State<Signup> {
   final _formKey = GlobalKey<FormState>();
+
   final _fullNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -20,20 +20,43 @@ class _SignupState extends State<Signup> {
   bool showPassword = false;
   bool showConfirmPassword = false;
 
-  void registerUser() async {
+  void registerUser() async { // click đăng ký
     final result = await callApi.register(
-      fullName: _fullNameController.text,
-      email: _emailController.text,
+      fullName: _fullNameController.text.trim(),
+      email: _emailController.text.trim(),
       password: _passwordController.text,
       confirm: _confirmController.text,
     );
 
-    if (result["status"] == true) {
-      print("Đăng ký thành công");
-      // qua trang home
-      Navigator.push(context, MaterialPageRoute(builder: (context) => Home()));
+    if (result["success"] == true) { // thành công
+      ScaffoldMessenger.of(context).showSnackBar( // thông báo
+        const SnackBar(
+          backgroundColor: Colors.green,
+          content: Text(
+            "Đăng ký thành công!",
+            style: TextStyle(color: Colors.white),
+          ),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      Navigator.push( // qua trang login
+        context,
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+      );
     } else {
-      print("Lỗi: ${result["message"]}");
+      ScaffoldMessenger.of(context).showSnackBar( // thông báo lỗi
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(
+            "Đăng ký thất bại! Vui lòng thử lại",
+            style: TextStyle(color: Colors.white),
+          ),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -43,12 +66,12 @@ class _SignupState extends State<Signup> {
       backgroundColor: Colors.white,
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+          padding: const EdgeInsets.all(20),
           child: Form(
             key: _formKey,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                // Icon
                 Container(
                   height: 64,
                   width: 64,
@@ -56,52 +79,49 @@ class _SignupState extends State<Signup> {
                     color: const Color(0x3339b2ef),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Icon(
+                  child: const Icon( // icon 
                     Icons.translate,
                     size: 40,
                     color: Color(0xff39b2ef),
                   ),
                 ),
 
-                // Title
-                const Padding(
-                  padding: EdgeInsets.only(top: 10),
-                  child: Text(
-                    "Đăng ký tài khoản",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
                 const SizedBox(height: 12),
-                // name
-                buildInputLabel("Họ tên"),
-                const SizedBox(height: 6),
+
+                const Text(
+                  "Đăng ký tài khoản",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+
+                const SizedBox(height: 24),
+
+                // Họ tên
                 TextFormField(
                   controller: _fullNameController,
                   decoration: buildDecoration(
-                    hint: "Nhập họ tên",
-                    icon: Icons.mail_outlined,
+                    label: "Họ tên",
+                    icon: Icons.person_outline,
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return "Vui lòng nhập họ tên";
                     }
-                    final nameRegex = RegExp(r"^[A-Za-zÀ-ỹ\s]{2,50}$");
-                    if (!nameRegex.hasMatch(value)) {
+                    final regex = RegExp(r"^[A-Za-zÀ-ỹ\s]{2,50}$");
+                    if (!regex.hasMatch(value)) {
                       return "Họ tên không hợp lệ";
                     }
-
                     return null;
                   },
                 ),
+
                 const SizedBox(height: 18),
+
                 // Email
-                buildInputLabel("Email"),
-                const SizedBox(height: 6),
                 TextFormField(
                   controller: _emailController,
                   decoration: buildDecoration(
-                    hint: "Nhập email",
-                    icon: Icons.mail_outlined,
+                    label: "Email",
+                    icon: Icons.mail_outline,
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -119,14 +139,12 @@ class _SignupState extends State<Signup> {
 
                 const SizedBox(height: 18),
 
-                // Password
-                buildInputLabel("Mật khẩu"),
-                const SizedBox(height: 6),
+                // Mật khẩu
                 TextFormField(
                   controller: _passwordController,
-                  obscureText: !showPassword,
+                  obscureText: !showPassword, // ẩn hiện ký tự
                   decoration: buildPasswordDecoration(
-                    hint: "Nhập mật khẩu",
+                    label: "Mật khẩu",
                     obscure: !showPassword,
                     onToggle: () {
                       setState(() => showPassword = !showPassword);
@@ -143,16 +161,14 @@ class _SignupState extends State<Signup> {
                   },
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 18),
 
-                // Confirm Password
-                buildInputLabel("Nhập lại mật khẩu"),
-                const SizedBox(height: 6),
+                // Nhập lại mật khẩu
                 TextFormField(
                   controller: _confirmController,
-                  obscureText: !showConfirmPassword,
+                  obscureText: !showConfirmPassword, // ẩn hiện ký tự
                   decoration: buildPasswordDecoration(
-                    hint: "Nhập lại mật khẩu",
+                    label: "Nhập lại mật khẩu",
                     obscure: !showConfirmPassword,
                     onToggle: () {
                       setState(
@@ -173,7 +189,7 @@ class _SignupState extends State<Signup> {
 
                 const SizedBox(height: 30),
 
-                // Create Account
+                // Button
                 SizedBox(
                   height: 56,
                   width: double.infinity,
@@ -186,17 +202,15 @@ class _SignupState extends State<Signup> {
                       elevation: 0,
                     ),
                     onPressed: () {
-                      if (_formKey.currentState!.validate()) {
-                        // TODO: handle signup logic
-                        print("Signup success");
-                        registerUser();
+                      if (_formKey.currentState!.validate()) { // validate dữ liệu nhập vào
+                        registerUser(); // gọi hàm đăng ký
                       }
                     },
                     child: const Text(
                       "Đăng ký",
                       style: TextStyle(
-                        fontWeight: FontWeight.bold,
                         fontSize: 16,
+                        fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
                     ),
@@ -205,7 +219,7 @@ class _SignupState extends State<Signup> {
 
                 const SizedBox(height: 18),
 
-                // Already have account?
+                // Login
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -215,7 +229,7 @@ class _SignupState extends State<Signup> {
                     ),
                     TextButton(
                       onPressed: () {
-                        Navigator.push(
+                        Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(builder: (_) => const LoginPage()),
                         );
@@ -230,8 +244,6 @@ class _SignupState extends State<Signup> {
                     ),
                   ],
                 ),
-
-                const SizedBox(height: 40),
               ],
             ),
           ),
@@ -240,42 +252,31 @@ class _SignupState extends State<Signup> {
     );
   }
 
-  // =================== Helper Widgets ===================
+  // ================= Decorations =================
 
-  Widget buildInputLabel(String text) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 15,
-          fontWeight: FontWeight.w600,
-          color: Color(0xff111618),
-        ),
-      ),
-    );
-  }
-
-  InputDecoration buildDecoration({
-    required String hint,
+  InputDecoration buildDecoration({// input bình thường
+    required String label,
     required IconData icon,
   }) {
     return InputDecoration(
+      labelText: label,
+      floatingLabelBehavior: FloatingLabelBehavior.auto,
       prefixIcon: Icon(icon, color: Colors.grey.shade500),
-      hintText: hint,
       filled: true,
       fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(vertical: 18),
+      contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
     );
   }
 
-  InputDecoration buildPasswordDecoration({
-    required String hint,
+  InputDecoration buildPasswordDecoration({ // input password
+    required String label,
     required bool obscure,
     required VoidCallback onToggle,
   }) {
     return InputDecoration(
+      labelText: label,
+      floatingLabelBehavior: FloatingLabelBehavior.auto,
       prefixIcon: Icon(Icons.lock_outline, color: Colors.grey.shade500),
       suffixIcon: IconButton(
         icon: Icon(
@@ -284,10 +285,9 @@ class _SignupState extends State<Signup> {
         ),
         onPressed: onToggle,
       ),
-      hintText: hint,
       filled: true,
       fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(vertical: 18),
+      contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
     );
   }

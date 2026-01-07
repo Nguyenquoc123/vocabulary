@@ -1,41 +1,13 @@
-import 'package:flutter/material.dart';
 import 'dart:math';
-
-class FlashCard {
-  final String word;
-  final String meaning;
-  final String example;
-
-  FlashCard({
-    required this.word,
-    required this.meaning,
-    required this.example,
-  });
-}
-
-final List<FlashCard> mockFlashcards = [
-  FlashCard(
-    word: "Ephemeral",
-    meaning: "Lasting for a very short time.",
-    example: "The beauty of cherry blossoms is ephemeral.",
-  ),
-  FlashCard(
-    word: "Serendipity",
-    meaning: "The occurrence of finding pleasant things by chance.",
-    example: "Meeting her there was pure serendipity.",
-  ),
-  FlashCard(
-    word: "Eloquent",
-    meaning: "Fluent or persuasive speaking or writing.",
-    example: "He gave an eloquent speech.",
-  ),
-];
-
-
-
+import 'package:flutter/material.dart';
+import 'package:studyvocabulary/model/flashcard.dart';
+import 'package:studyvocabulary/model/user.dart';
+import 'package:studyvocabulary/service/api.dart';
 
 class FlashcardScreen extends StatefulWidget {
-  const FlashcardScreen({super.key});
+  final int lessonId;
+  final bool myword;
+  const FlashcardScreen({super.key, required this.lessonId, required this.myword});
 
   @override
   State<FlashcardScreen> createState() => _FlashcardScreenState();
@@ -43,49 +15,80 @@ class FlashcardScreen extends StatefulWidget {
 
 class _FlashcardScreenState extends State<FlashcardScreen>
     with SingleTickerProviderStateMixin {
+
   int currentIndex = 0;
   bool isFront = true;
+  bool loading = true;
+
+  List<FlashCard> flashcards = [];
 
   late AnimationController _controller;
-  late Animation<double> _flipAnimation;
+  late Animation<double> _animation;
 
   @override
-  void initState() {
+  void initState() { // chạy lần đầu
     super.initState();
-    _controller =
-        AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
 
-    _flipAnimation =
-        Tween<double>(begin: 0, end: pi).animate(_controller);
+    _controller = AnimationController( // quản lý chạy hiệu ứng
+      vsync: this,
+      duration: const Duration(milliseconds: 300), // trong 300mili
+    );
+
+    _animation = Tween<double>(begin: 0, end: pi).animate(_controller); // xoay 180
+
+    _loadFlashcards();
   }
 
-  void flipCard() {
-    if (isFront) {
-      _controller.forward();
-    } else {
-      _controller.reverse();
+  Future<void> _loadFlashcards() async { // load ds từ
+    if(widget.myword){ // nếu là từ của tôi
+      final userId = await User.getUserId();
+      flashcards = await callApi.getMyWordFlashcards(userId!);
     }
-    isFront = !isFront;
+    else{ // bài có sẵn
+      flashcards = await callApi.getFlashCards(widget.lessonId);
+    }
+    setState(() => loading = false);
   }
 
-  void nextCard() {
-    if (currentIndex < mockFlashcards.length - 1) {
+  void _flipCard() {
+    if (_controller.isAnimating) return; // hiệu ứng đang chạy
+
+    isFront ? _controller.forward() : _controller.reverse();
+    setState(() => isFront = !isFront);
+  }
+
+  void _nextCard() {// từ tiếp theo
+    if (currentIndex < flashcards.length - 1) {
       setState(() {
         currentIndex++;
         isFront = true;
-        _controller.reverse();
+        _controller.reset();
       });
+    } else { // hết từ
+      Navigator.pop(context);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final card = mockFlashcards[currentIndex];
-    final progressPercent = ((currentIndex + 1) / mockFlashcards.length) * 100;
+
+    if (loading) {// đang load
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (flashcards.isEmpty) { // ko có từ nào
+      return const Scaffold(
+        body: Center(child: Text("Bài học chưa có flashcard")),
+      );
+    }
+
+    final card = flashcards[currentIndex];
 
     return Scaffold(
       appBar: AppBar(
-        title: Text("Card ${currentIndex + 1}/${mockFlashcards.length}"),
+        title: Text("${currentIndex + 1}/${flashcards.length}"),
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.close),
@@ -96,56 +99,28 @@ class _FlashcardScreenState extends State<FlashcardScreen>
       body: Column(
         children: [
 
-          // Progress Bar
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: LinearProgressIndicator(
-                value: (currentIndex + 1) / mockFlashcards.length,
-                minHeight: 6,
-                color: Colors.orange,
-                backgroundColor: Colors.orange.withOpacity(0.2),
-              ),
+            padding: const EdgeInsets.all(16),
+            child: LinearProgressIndicator(
+              value: (currentIndex + 1) / flashcards.length,
             ),
           ),
 
-          const SizedBox(height: 20),
-
-          // Flashcard
           Expanded(
-            child: GestureDetector(
-              onTap: flipCard,
+            child: GestureDetector(// có thể nhấn như button
+              onTap: _flipCard,
               child: Center(
                 child: AnimatedBuilder(
-                  animation: _flipAnimation,
-                  builder: (context, child) {
-                    final isBack = _flipAnimation.value > pi / 2;
+                  animation: _animation,
+                  builder: (_, __) {
+                    final isBack = _animation.value > pi / 2;
 
                     return Transform(
                       alignment: Alignment.center,
                       transform: Matrix4.identity()
-                        ..setEntry(3, 2, 0.001)
-                        ..rotateY(_flipAnimation.value),
-                      child: Container(
-                        width: 280,
-                        height: 380,
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: const [
-                            BoxShadow(
-                              offset: Offset(0, 4),
-                              blurRadius: 10,
-                              color: Colors.black12,
-                            )
-                          ],
-                        ),
-                        child: isBack
-                            ? _buildBack(card)
-                            : _buildFront(card),
-                      ),
+                        // ..setEntry(3, 2, 0.001)
+                        ..rotateY(_animation.value),
+                      child: _buildCard(isBack ? _back(card) : _front(card)),
                     );
                   },
                 ),
@@ -153,51 +128,35 @@ class _FlashcardScreenState extends State<FlashcardScreen>
             ),
           ),
 
-          // Bottom buttons
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      backgroundColor: Colors.grey.shade200,
-                      foregroundColor: Colors.black,
-                    ),
-                    onPressed: nextCard,
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.close),
-                        SizedBox(width: 6),
-                        Text("Don't Know"),
-                      ],
-                    ),
+            child: SizedBox(
+              width: double.infinity, // Làm cho nút dài hết chiều ngang
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-
-                const SizedBox(width: 12),
-
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      backgroundColor: Colors.orange,
-                      foregroundColor: Colors.white,
+                onPressed: _nextCard,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Hiển thị chữ "Finish" nếu là thẻ cuối cùng
+                    Text(
+                      currentIndex < flashcards.length - 1 
+                        ? "Next" 
+                        : "Finish",
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
-                    onPressed: nextCard,
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.check),
-                        SizedBox(width: 6),
-                        Text("Know"),
-                      ],
-                    ),
-                  ),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.arrow_forward),
+                  ],
                 ),
-              ],
+              ),
             ),
           )
         ],
@@ -205,37 +164,54 @@ class _FlashcardScreenState extends State<FlashcardScreen>
     );
   }
 
-  Widget _buildFront(FlashCard card) {
+  Widget _buildCard(Widget child) {
+    return Container(
+      width: 280,
+      height: 380,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(blurRadius: 10, color: Colors.black12),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _front(FlashCard card) {// mặt trước
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(card.word,
-            style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
-        const Text("Tap to see meaning",
-            style: TextStyle(color: Colors.grey)),
+        Text(
+          card.word,
+          style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        const Text("Nhấn để xem nghĩa"),
       ],
     );
   }
 
-  Widget _buildBack(FlashCard card) {
+  Widget _back(FlashCard card) {// mặt sau
     return Transform(
       alignment: Alignment.center,
-      transform: Matrix4.identity()..rotateY(pi),
+      transform: Matrix4.rotationY(pi),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(card.word,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          Text(card.meaning, style: const TextStyle(fontSize: 16)),
-          const SizedBox(height: 14),
           Text(
-            "\"${card.example}\"",
+            card.word,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            card.meaning,
             style: const TextStyle(
-              fontStyle: FontStyle.italic,
-              color: Colors.grey,
+              fontSize: 22,
+              color: Colors.orange,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],

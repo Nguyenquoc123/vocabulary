@@ -1,35 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-
-class ListeningQuestion {
-  final String sentence;
-  final String answer;
-  final String meaning;
-
-  ListeningQuestion({required this.sentence, required this.answer, required this.meaning});
-}
+import 'package:studyvocabulary/model/listeningquestion.dart';
+import 'package:studyvocabulary/model/user.dart';
+import 'package:studyvocabulary/service/api.dart';
 
 // Mô phỏng dữ liệu
-final List<ListeningQuestion> mockQuestions = [
-  ListeningQuestion(
-    sentence: "Hello, how are you?",
-    answer: "Hello, how are you?",
-    meaning: "Xin chào, ní khỏe không!"
-  ),
-  ListeningQuestion(
-    sentence: "I like learning Flutter.",
-    answer: "I like learning Flutter.",
-    meaning: "Tôi thích học Flutter."
-  ),
-  ListeningQuestion(
-    sentence: "Flutter is awesome!",
-    answer: "Flutter is awesome!",
-    meaning: "Flutter là con gà!"
-  ),
-];
 
 class ListeningScreen extends StatefulWidget {
-  const ListeningScreen({super.key});
+  final int lessonId;
+  const ListeningScreen({super.key, required this.lessonId});
 
   @override
   State<ListeningScreen> createState() => _ListeningScreenState();
@@ -39,44 +18,92 @@ class _ListeningScreenState extends State<ListeningScreen> {
   final FlutterTts tts = FlutterTts();
   int currentIndex = 0;
   final TextEditingController controller = TextEditingController();
+  List<ListeningQuestion> mockQuestions = [];
+  bool loading = true;
+  int score = 0;
+
+  Future<void> _loadListennings() async {
+    //load câu hỏi
+    mockQuestions = await callApi.getListeningQuestions(widget.lessonId);
+    setState(() => loading = false);
+  }
+
+  Future<void> luuDiem(int lessonId, int score) async {
+    // lưu điểm
+    final userId = await User.getUserId();
+
+    if (userId == null) return;
+
+    final success = await callApi.saveScore(
+      userId: userId,
+      lessonId: lessonId,
+      score: score,
+    );
+
+    if (success) {
+      print("Lưu điểm thành công");
+    } else {
+      print("Lưu điểm thất bại");
+    }
+  }
+
+  @override
+  void initState() {
+    // chạy lần đầu
+    super.initState();
+    _loadListennings();
+  }
 
   @override
   void dispose() {
+    // xóa bộ nhớ
     tts.stop();
     controller.dispose();
     super.dispose();
   }
 
   void _playAudio() async {
-    await tts.stop();
-    await tts.speak(mockQuestions[currentIndex].sentence);
+    //phát âm thanh
+    await tts.stop(); // dừng âm thanh đang phát
+    await tts.speak(mockQuestions[currentIndex].sentence); // phát
   }
 
   void _checkAnswer() {
-    final userInput = controller.text.trim();
-    final correctAnswer = mockQuestions[currentIndex].answer.trim();
+    // check đáp án
+    final userInput = controller.text.trim(); // người dùng trả lời
+    final correctAnswer = mockQuestions[currentIndex].answer
+        .trim(); // đáp án đúng
 
-    bool isCorrect = userInput.toLowerCase() == correctAnswer.toLowerCase();
-
-    showDialog(
-      context: context,
-      builder: (dialog) => AlertDialog(
-        title: Text(isCorrect ? "Correct!" : "Incorrect"),
-        content: Text("Correct answer:\n$correctAnswer"),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(dialog).pop();
-              _nextQuestion();
-            },
-            child: const Text("Next"),
+    bool isCorrect =
+        userInput.toLowerCase() == correctAnswer.toLowerCase(); // true or false
+    if (isCorrect) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color.fromARGB(255, 0, 255, 8),
+          content: Text("Chính xác!", style: TextStyle(color: Colors.white)),
+          duration: Duration(seconds: 1),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      score += 10;
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Color.fromARGB(255, 255, 0, 0),
+          content: Text(
+            "Sai rồi! $correctAnswer mới đúng.",
+            style: TextStyle(color: Colors.white),
           ),
-        ],
-      ),
-    );
+          duration: Duration(seconds: 1),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    _nextQuestion();
   }
 
   void _nextQuestion() {
+    // câu hỏi tiếp theo
     if (currentIndex < mockQuestions.length - 1) {
       setState(() {
         currentIndex++;
@@ -84,19 +111,61 @@ class _ListeningScreenState extends State<ListeningScreen> {
       });
     } else {
       // Hết câu hỏi
+      luuDiem(widget.lessonId, score);
       showDialog(
         context: context,
         builder: (dialog) => AlertDialog(
-          title: const Text("Completed"),
-          content: const Text("You have completed all questions."),
-          actions: [
-            TextButton(
-              onPressed: () => {
-                Navigator.of(dialog).pop(),
-                Navigator.of(context).pop(),
-              },
+          backgroundColor: const Color.fromARGB(255, 0, 255, 76),
 
-              child: const Text("Close"),
+          title: Icon(Icons.emoji_events, size: 60, color: Colors.white),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Hoàn thành!",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 24,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                "Nhận được $score điểm.",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            Center(
+              child: TextButton(
+                onPressed: () {
+                  Navigator.of(dialog).pop();
+                  Navigator.of(context).pop(true);
+                },
+                style: TextButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  "Đóng",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -106,15 +175,34 @@ class _ListeningScreenState extends State<ListeningScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (loading) {
+      // đang load
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(
-          "Listening Practice  ${currentIndex + 1}/${mockQuestions.length}",
+          "${currentIndex + 1}/${mockQuestions.length}",
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
         ),
         elevation: 0,
         backgroundColor: Colors.white,
+        centerTitle: true,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Center(
+              child: Text(
+                "Score: $score",
+                style: const TextStyle(
+                  color: Colors.orange,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -141,7 +229,7 @@ class _ListeningScreenState extends State<ListeningScreen> {
               ),
             ),
             SizedBox(height: 30),
-            // Nút phát âm thanh — đẹp hơn
+            // Nút phát âm thanh
             GestureDetector(
               onTap: _playAudio,
               child: Container(
@@ -178,37 +266,20 @@ class _ListeningScreenState extends State<ListeningScreen> {
 
             const SizedBox(height: 50),
 
-            // Ô nhập — style hiện đại
+            // Ô nhập
             TextField(
               controller: controller,
-              style: const TextStyle(fontSize: 18),
               decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.white,
                 hintText: "Nhập đáp án...",
-                hintStyle: TextStyle(color: Colors.grey.shade400),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(color: Colors.green.shade200),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(color: Colors.green, width: 2),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 18,
                 ),
               ),
             ),
 
             const SizedBox(height: 32),
 
-            // Nút check — đẹp hơn
+            // Nút check
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -232,7 +303,6 @@ class _ListeningScreenState extends State<ListeningScreen> {
               ),
             ),
 
-            
             const SizedBox(height: 10),
 
             ElevatedButton(

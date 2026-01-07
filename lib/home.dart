@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:studyvocabulary/A.dart';
 import 'package:studyvocabulary/lesson.dart';
 import 'package:studyvocabulary/model/user.dart';
+import 'package:studyvocabulary/myword.dart';
 import 'package:studyvocabulary/profile.dart';
+import 'package:studyvocabulary/rank.dart';
+import 'package:studyvocabulary/service/api.dart';
 
 void main() {
   runApp(const Home());
@@ -34,28 +36,6 @@ class _HomeState extends State<Home> {
   }
 }
 
-// Mock data for recommended lessons
-final List<RecommendedLesson> recommendedLessons = [
-  RecommendedLesson(
-    title: 'Business English Basics',
-    level: 'Beginner',
-    imageUrl:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuAElGEO6-q4Ujo9pqQ0JUR66MeE3QNnDwOzbRK9LO5RbPqOELH8AwTNvxQsZgQ_FoC2_o7KX6j-GFHkaUdw77h5vgpqVBKbCj2aT1JZsUK3cjzDz8Vo4xsiGAR8TzcPZiHFXLkljaWsCkcZdBcX3zEBBQ24hi4_oAj4jASAufRlUt-liEhzIYISJzLP7L37CtdTHV_jjN9i2wzn3EhsF38LTtbdgLBhJ8OyrewtFSa5kZYG_A9HJ-QOmE5Aj_quFtKwAOAviuv7l88',
-  ),
-  RecommendedLesson(
-    title: 'Travel Vocabulary',
-    level: 'Intermediate',
-    imageUrl:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuD3YtX5SRfrboVcUvPBiM6Jrw1ijLDfQOwPXt1R5alFHa8HUckAnavg1373iWc4xq_dNVvBWegrgnWg_7LAAe1yBMClxfUbzXpPhxa2gihQIfHMUSvti3wQrm_JqayCQMOyd2iZ1mMDmLqcUGuw19d8EPKF4XZem3UwEqcDl97Mm4EJmzX7LuEFK1aS9QMCzmUpCBOhNHOec_-ExRNnWj0_6pEyMvgRcWkymCbuEkiJgHE9_xGslwlj5udO9AZZftHPl_jsMOdmwyE',
-  ),
-  RecommendedLesson(
-    title: 'Food & Dining',
-    level: 'Beginner',
-    imageUrl:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuAZW-ks9Zcr_Vo528eA7QJSapMSyBiSBLzJVZF_6I7qGuZE2mmyeBY6Cdls9SKeHDUoqvlID7h2tpcZlz6vxVNU9PfnwAXzE_6gq2juEPh2JIYYCmbhfm4xp55xi2xH8jx2X0IrV822ztD97Cnxu5Ib_DPPjMvNP02g7URe921Mc-YGxYTv8KARLlru3HBzOWFJ3I84Lblry6UWk4D7Gk0aviduvopaxaqEK0tJ4MzGRnFfaALku55N9Q--Nu3y2_vpMecIj6OvSbk',
-  ),
-];
-
 final List<Map<String, dynamic>> practiceModes = [
   {
     'icon': Icons.quiz,
@@ -72,16 +52,6 @@ final List<Map<String, dynamic>> practiceModes = [
     'title': 'Match Words',
     'color': Color(0xFFF5A623),
   }, // cam sáng
-  {
-    'icon': Icons.pin,
-    'title': 'Missing Letters',
-    'color': Color(0xFF9013FE),
-  }, // tím đậm
-  {
-    'icon': Icons.edit_note,
-    'title': 'Sentence Arrage',
-    'color': Color(0xFF7ED321),
-  }, // xanh lá
   {
     'icon': Icons.headphones,
     'title': 'Listening',
@@ -100,6 +70,27 @@ class _HomePageState extends State<HomePage> {
   var currentIndex = 0;
   String completed = "-";
   String xp = "-";
+  int user_id = -1;
+  @override
+  void initState() { //  gọi lần đầu
+    super.initState();
+    loadScoreSummary();
+  }
+
+  Future<void> loadScoreSummary() async {// load lần học và điểm xp
+    final userId = await User.getUserId();
+    
+    if (userId == null) return;
+    final summary = await callApi.getUserScoreSummary(userId);
+    user_id = userId;
+    if (summary != null) {
+      setState(() {
+        completed = summary.totalAttempts.toString();
+        xp = summary.totalScore.toString();
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -129,7 +120,7 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(height: 16),
               // Daily Progress Card
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16), //padding left-right
                 child: Card(
                   color: Colors.white,
                   shape: RoundedRectangleBorder(
@@ -146,7 +137,7 @@ class _HomePageState extends State<HomePage> {
                       children: [
                         StatCard(
                           icon: Icons.local_fire_department,
-                          title: 'Hoàn thành',
+                          title: 'Lần học',
                           value: completed,
                           color: Colors.orange,
                         ),
@@ -171,44 +162,74 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: GridView.count(
-                  crossAxisCount: 2, // ⭐ 2 thẻ mỗi hàng
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  shrinkWrap: true, // ⭐ cần cho Grid trong ScrollView
-                  physics:
-                      NeverScrollableScrollPhysics(), // để scroll theo trang chính
-                  children: practiceModes.map((mode) {
-                    return PracticeModeCard(
+              // 
+              ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(), // vô hiệu hóa cuộn
+                itemCount: practiceModes.length,
+                itemBuilder: (context, index) {
+                  final mode = practiceModes[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(
+                      bottom: 12,
+                    ), // Tạo khoảng cách giữa các nút
+                    child: PracticeModeCard(
                       icon: mode['icon'],
                       title: mode['title'],
                       color: mode['color'],
-                      onTap: () {
-                        Navigator.push(
+                      onTap: () async {
+                        final reload = await Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) =>
                                 LessonSelectionPage(initialMode: mode['title']),
                           ),
                         );
+
+                        if (reload == true) {
+                          loadScoreSummary(); // load lại XP & lần học
+                        }
                       },
+                    ),
+                  );
+                },
+              ),
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 16,
+                ), // Tạo khoảng cách giữa các nút
+                child: PracticeModeCard(
+                  icon: Icons.verified_user,
+                  title: "Từ của tôi",
+                  color: const Color.fromARGB(255, 0, 217, 255),
+                  onTap: () async {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MyWordPage(userId: user_id),
+                      ),
                     );
-                  }).toList(),
+                  },
                 ),
               ),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: currentIndex,
+      bottomNavigationBar: BottomNavigationBar( // menu bottom
+        currentIndex: currentIndex, // currentIndex = 0 là home
         selectedItemColor: Colors.orange,
         unselectedItemColor: Colors.grey,
         onTap: (index) {
-          if (index == 2) {
+          if (index == 1) {
             // tab "Cá nhân"
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const RankPage()),
+            );
+          } else if (index == 2) {
+            // tab "profile"
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const ProfilePage()),
@@ -292,7 +313,7 @@ class PracticeModeCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final Color color;
-  final VoidCallback? onTap; // thêm callback
+  final VoidCallback? onTap;
 
   const PracticeModeCard({
     super.key,
@@ -304,46 +325,56 @@ class PracticeModeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap, // gọi callback khi click
-      child: SizedBox(
-        width: 140,
-        height: 140,
-        child: Card(
-          color: const Color.fromARGB(255, 255, 255, 255),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(
-              color: Color.fromARGB(255, 0, 0, 0), // màu viền
-              width: 1,
+    return InkWell(
+      // hiệu ứng gợn sóng khi chạm
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.black12, // Màu viền nhẹ nhàng hơn
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
             ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 48, color: color),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: color, fontWeight: FontWeight.bold),
+          ],
+        ),
+        child: Row(
+          children: [
+            // 
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
               ),
-            ],
-          ),
+              child: Icon(icon, size: 28, color: color),
+            ),
+            const SizedBox(width: 20),
+            Text(
+              title,
+              style: TextStyle(
+                color: Colors.black87,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Spacer(),
+            Icon(
+              Icons.chevron_right,
+              color: Colors.grey[400],
+            ), // icon mũi tên chỉ hướng
+          ],
         ),
       ),
     );
   }
 }
 
-class RecommendedLesson {
-  final String title;
-  final String level;
-  final String imageUrl;
-
-  RecommendedLesson({
-    required this.title,
-    required this.level,
-    required this.imageUrl,
-  });
-}

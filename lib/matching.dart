@@ -2,34 +2,15 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math';
 
+import 'package:studyvocabulary/model/Matching.dart';
+import 'package:studyvocabulary/model/user.dart';
+import 'package:studyvocabulary/service/api.dart';
+
 // Model và mock data
-class MatchItem {
-  final String word;
-  final String meaning;
-
-  MatchItem({
-    required this.word,
-    required this.meaning,
-  });
-}
-
-final List<MatchItem> mockMatchList = [
-  MatchItem(word: "Ephemeral", meaning: "Lasting for a very short time"),
-  MatchItem(word: "Ubiquitous", meaning: "Present, appearing, or found everywhere"),
-  MatchItem(word: "Mellifluous", meaning: "Pleasant to hear"),
-  MatchItem(word: "Pulchritudinous", meaning: "Having great physical beauty"),
-  MatchItem(word: "Ebullient", meaning: "Cheerful and full of energy"),
-  MatchItem(word: "Ineffable", meaning: "Too great to be expressed in words"),
-  MatchItem(word: "Ephemeral", meaning: "Lasting for a very short time"),
-  MatchItem(word: "Ubiquitous", meaning: "Present, appearing, or found everywhere"),
-  MatchItem(word: "Mellifluous", meaning: "Pleasant to hear"),
-  MatchItem(word: "Pulchritudinous", meaning: "Having great physical beauty"),
-  MatchItem(word: "Ebullient", meaning: "Cheerful and full of energy"),
-  MatchItem(word: "Ineffable", meaning: "Too great to be expressed in words")
-];
 
 class MatchingScreen extends StatefulWidget {
-  const MatchingScreen({super.key});
+  final int lessonId;
+  const MatchingScreen({super.key, required this.lessonId});
 
   @override
   State<MatchingScreen> createState() => _MatchingScreenState();
@@ -37,38 +18,60 @@ class MatchingScreen extends StatefulWidget {
 
 class _MatchingScreenState extends State<MatchingScreen> {
   List<Map<String, dynamic>> gridItems = [];
+  List<Matching> mockMatchList = [];
   int? firstSelectedIndex;
   bool _isProcessing = false;
   Timer? _resetTimer;
+  bool loading = true;
+  int score = 0;
 
-  // =============================
-  // Round logic
-  // =============================
   int round = 0;
   final int pairsPerRound = 4;
 
-  List<MatchItem> getCurrentRoundItems() {
+  Future<void> _loadMatchings() async {// load ds câu hỏi
+    mockMatchList = await callApi.getMatchings(widget.lessonId);
+    setState(() => loading = false);
+    setupGrid();
+  }
+
+  List<Matching> getCurrentRoundItems() {// lấy ds câu hỏi trong 1 round
     int start = round * pairsPerRound;
     int end = min(start + pairsPerRound, mockMatchList.length);
     return mockMatchList.sublist(start, end);
   }
 
-  @override
-  void initState() {
-    super.initState();
-    setupGrid();
+  Future<void> luuDiem(int lessonId, int score) async {
+    final userId = await User.getUserId();
+    print("start save score");
+    if (userId == null) return;
+    print("start save score 2");
+    final success = await callApi.saveScore(
+      userId: userId,
+      lessonId: lessonId,
+      score: score,
+    );
+
+    if (success) {
+      print("Lưu điểm thành công");
+    } else {
+      print("Lưu điểm thất bại");
+    }
   }
 
   @override
-  void dispose() {
+  void initState() {// chạy lần đầu
+    super.initState();
+    _loadMatchings();
+  }
+
+  @override
+  void dispose() {// giải phòng bộ nhớ
     _resetTimer?.cancel();
     super.dispose();
   }
 
-  // =============================
-  // Setup round grid (4 cặp)
-  // =============================
-  void setupGrid() {
+  
+  void setupGrid() {// tạo cặp từ
     final List<Map<String, dynamic>> temp = [];
 
     for (var item in getCurrentRoundItems()) {
@@ -78,12 +81,16 @@ class _MatchingScreenState extends State<MatchingScreen> {
 
     temp.shuffle(Random());
 
-    gridItems = temp.map((e) => {
-          "text": e["text"],
-          "pair": e["pair"],
-          "type": e["type"],
-          "state": "default",
-        }).toList();
+    gridItems = temp
+        .map(
+          (e) => {
+            "text": e["text"],
+            "pair": e["pair"],
+            "type": e["type"],
+            "state": "default",
+          },
+        )
+        .toList();
 
     firstSelectedIndex = null;
     _isProcessing = false;
@@ -91,30 +98,28 @@ class _MatchingScreenState extends State<MatchingScreen> {
     setState(() {});
   }
 
-  // =============================
-  // Card tap logic
-  // =============================
+  
   void onCardTap(int index) {
-    if (_isProcessing) return;
-    if (gridItems[index]["state"] == "correct") return;
+    if (_isProcessing) return;// đang reset
+    if (gridItems[index]["state"] == "correct") return;// đã trả lời đứng
 
     setState(() {
-      if (firstSelectedIndex == null) {
+      if (firstSelectedIndex == null) {// chọn thẻ đầu tiên
         firstSelectedIndex = index;
         gridItems[index]["state"] = "selected";
         return;
       }
 
-      if (firstSelectedIndex == index) {
+      if (firstSelectedIndex == index) {// chọn lại thẻ đầu tiên
         gridItems[index]["state"] = "default";
         firstSelectedIndex = null;
         return;
       }
 
-      final first = gridItems[firstSelectedIndex!];
-      final second = gridItems[index];
+      final first = gridItems[firstSelectedIndex!];// thẻ thứ nhất
+      final second = gridItems[index];// thẻ thứ 2
 
-      // cùng loại (word-word hoặc meaning-meaning)
+      // cùng loại 
       if (first["type"] == second["type"]) {
         gridItems[firstSelectedIndex!]["state"] = "wrong";
         gridItems[index]["state"] = "wrong";
@@ -127,10 +132,12 @@ class _MatchingScreenState extends State<MatchingScreen> {
         gridItems[firstSelectedIndex!]["state"] = "correct";
         gridItems[index]["state"] = "correct";
         firstSelectedIndex = null;
+        score += 10;
       } else {
         gridItems[firstSelectedIndex!]["state"] = "wrong";
         gridItems[index]["state"] = "wrong";
         _startResetForPair(firstSelectedIndex!, index);
+        score = score - 5 < 0 ? 0 : score - 5;
       }
     });
   }
@@ -141,8 +148,10 @@ class _MatchingScreenState extends State<MatchingScreen> {
 
     _resetTimer = Timer(const Duration(milliseconds: 650), () {
       setState(() {
-        if (gridItems[a]["state"] != "correct") gridItems[a]["state"] = "default";
-        if (gridItems[b]["state"] != "correct") gridItems[b]["state"] = "default";
+        if (gridItems[a]["state"] != "correct")
+          gridItems[a]["state"] = "default";
+        if (gridItems[b]["state"] != "correct")
+          gridItems[b]["state"] = "default";
         _isProcessing = false;
         firstSelectedIndex = null;
       });
@@ -151,6 +160,9 @@ class _MatchingScreenState extends State<MatchingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (loading) {// đang load
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     final int correctCount =
         gridItems.where((e) => e["state"] == "correct").length ~/ 2;
     final int totalPairs = getCurrentRoundItems().length;
@@ -159,17 +171,27 @@ class _MatchingScreenState extends State<MatchingScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 1,
-        surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
+        elevation: 0,
+        
         title: Text(
-          "Matching – Round ${round + 1}",
+          "Round ${round + 1}",
           style: const TextStyle(color: Colors.black),
         ),
         centerTitle: true,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Center(
+              child: Text(
+                "Score: $score",
+                style: const TextStyle(
+                  color: Colors.orange,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
 
       body: Column(
@@ -194,10 +216,10 @@ class _MatchingScreenState extends State<MatchingScreen> {
               padding: const EdgeInsets.all(16),
               child: GridView.builder(
                 itemCount: gridItems.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 14,
-                  crossAxisSpacing: 14,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(// chia theo số cột cố định
+                  crossAxisCount: 2,//2 cột
+                  mainAxisSpacing: 14, // khoảng cách dòng
+                  crossAxisSpacing: 14,// khoảng cách cột
                   childAspectRatio: 1,
                 ),
                 itemBuilder: (context, index) => _buildCard(index),
@@ -214,32 +236,111 @@ class _MatchingScreenState extends State<MatchingScreen> {
               border: Border(top: BorderSide(color: Colors.black12)),
             ),
             child: ElevatedButton(
-              onPressed: correctCount == totalPairs ? () {
-                int nextStart = (round + 1) * pairsPerRound;
+              onPressed: correctCount == totalPairs
+                  ? () {
+                      int nextStart = (round + 1) * pairsPerRound;
 
-                if (nextStart < mockMatchList.length) {
-                  // còn cặp → sang round mới
-                  print("con gà");
-                  setState(() {
-                    round++;
-                  });
-                  setupGrid();
-                } else {
-                  // hết → thoát
-                  Navigator.pop(context);
-                }
-              } : null,
+                      if (nextStart < mockMatchList.length) {
+                        
+                        
+                        setState(() {
+                          round++;
+                        });
+                        setupGrid();
+                      } else {
+                        // hết
+                        luuDiem(widget.lessonId, score);
+                        showDialog(
+                          context: context,
+                          builder: (dialog) => AlertDialog(
+                            backgroundColor: const Color.fromARGB(
+                              255,
+                              0,
+                              255,
+                              76,
+                            ),
+
+                            title: Icon(
+                              Icons.emoji_events,
+                              size: 60,
+                              color: Colors.white,
+                            ),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text(
+                                  "Hoàn thành!",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 24,
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  "Nhận được $score điểm.",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 20,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            actions: [
+                              Center(
+                                child: TextButton(
+                                  onPressed: () {
+                                    Navigator.of(dialog).pop();
+                                    Navigator.of(context).pop(true);
+                                  },
+                                  style: TextButton.styleFrom(
+                                    backgroundColor: Colors.blueAccent,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 32,
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    "Đóng",
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                        // Navigator.pop(context);
+                      }
+                    }
+                  : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color.fromARGB(255, 0, 132, 255),
-                disabledBackgroundColor: const Color.fromARGB(255, 135, 227, 255).withOpacity(0.4),
+                disabledBackgroundColor: const Color.fromARGB(
+                  255,
+                  135,
+                  227,
+                  255,
+                ).withOpacity(0.4),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
               child: const Text(
-                "Continue",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                "Tiếp",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
             ),
           ),
@@ -248,9 +349,7 @@ class _MatchingScreenState extends State<MatchingScreen> {
     );
   }
 
-  // =============================
-  // Card UI builder
-  // =============================
+  
   Widget _buildCard(int index) {
     final item = gridItems[index];
     final state = item["state"];
@@ -295,8 +394,9 @@ class _MatchingScreenState extends State<MatchingScreen> {
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 16,
-            fontWeight:
-                item["type"] == "meaning" ? FontWeight.w500 : FontWeight.w700,
+            fontWeight: item["type"] == "meaning"
+                ? FontWeight.w500
+                : FontWeight.w700,
             color: textColor,
           ),
         ),

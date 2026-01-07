@@ -1,98 +1,133 @@
 import 'package:flutter/material.dart';
 import 'package:studyvocabulary/home.dart';
 import 'package:studyvocabulary/login.dart';
+import 'package:studyvocabulary/model/user.dart';
+import 'package:studyvocabulary/rank.dart';
+import 'package:studyvocabulary/service/api.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
   @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  String fullName = "-";
+  String completed = "-";
+  String xp = "-";
+
+  @override
+  void initState() {
+    super.initState();
+    loadProfile();
+  }
+
+  Future<void> loadProfile() async {
+    final name = await User.getFullName();
+    final userId = await User.getUserId();
+
+    if (userId == null) return;
+
+    final summary = await callApi.getUserScoreSummary(userId);
+
+    setState(() {
+      fullName = name ?? "-";
+      if (summary != null) {
+        completed = summary.totalAttempts.toString();
+        xp = summary.totalScore.toString();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final avatarChar = fullName.isNotEmpty ? fullName[0].toUpperCase() : "?";
+
     return Scaffold(
       backgroundColor: Colors.white,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Avatar chữ cái đầu
+              CircleAvatar(
+                radius: 60,
+                backgroundColor: Colors.blue.shade100,
+                child: Text(
+                  avatarChar,
+                  style: const TextStyle(
+                    fontSize: 48,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
 
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Avatar
-            const CircleAvatar(
-              radius: 60,
-              backgroundImage: NetworkImage("https://i.pravatar.cc/300"),
-            ),
-            const SizedBox(height: 16),
+              // Tên user
+              Text(
+                fullName,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
 
-            const Text(
-              "Tên người dùng",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
+              const SizedBox(height: 30),
 
-            const SizedBox(height: 30),
+              // 
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildStat("Lần học", completed),
+                  _buildStat("XP", xp),
+                ],
+              ),
 
-            // Stats
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildStat("Bài đã hoàn thành", "32"),
-                _buildStat("Từ đã học", "450"),
-                _buildStat("XP", "1280"),
-              ],
-            ),
+              const SizedBox(height: 30),
 
-            const SizedBox(height: 30),
-
-            // Button Thông tin cá nhân
-            _buildMenuButton(
-              icon: Icons.person,
-              text: "Thông tin cá nhân",
-              onTap: () {},
-            ),
-
-            const SizedBox(height: 20),
-
-            _buildMenuButton(
-              icon: Icons.store,
-              text: "Mua bản Pro",
-              onTap: () {},
-            ),
-
-            const SizedBox(height: 20),
-
-            // Button Logout
-            _buildMenuButton(
-              icon: Icons.logout,
-              text: "Đăng xuất",
-              onTap: () {
-                // Xử lý logout
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginPage()),
-                );
-              },
-              color: Colors.redAccent,
-              textColor: Colors.white,
-            ),
-          ],
+              // Logout
+              _buildMenuButton(
+                icon: Icons.logout,
+                text: "Đăng xuất",
+                onTap: () async {
+                  await User.clear();
+                  if (!mounted) return;
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                    (route) => false,
+                  );
+                },
+                color: Colors.redAccent,
+                textColor: Colors.white,
+              ),
+            ],
+          ),
         ),
       ),
 
+      // Bottom bar
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 2, // Luôn highlight tab cuối (index 2)
+        currentIndex: 2,
         selectedItemColor: Colors.orange,
         unselectedItemColor: Colors.grey,
         onTap: (index) {
-          if (index == 2) {
-            // Mở trang cá nhân khi click tab cuối
+          if (index == 0) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => HomePage()),
+            );
+          } else if (index == 1) {
+            // tab "Cá nhân"
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const ProfilePage()),
+              MaterialPageRoute(builder: (context) => const RankPage()),
             );
-          } else if (index == 0) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => HomePage()),
-            );
-          } else if (index == 1) {}
+          }
         },
         items: const [
           BottomNavigationBarItem(
@@ -116,25 +151,21 @@ class ProfilePage extends StatelessWidget {
   }
 
   // Widget thống kê
-  static Widget _buildStat(String label, String value) {
+  Widget _buildStat(String label, String value) {
     return Column(
       children: [
         Text(
           value,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 4),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 13, color: Colors.grey),
-        ),
+        Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey)),
       ],
     );
   }
 
-  // Widget button menu
-  static Widget _buildMenuButton({
+  // Button
+  Widget _buildMenuButton({
     required IconData icon,
     required String text,
     required VoidCallback onTap,
@@ -148,16 +179,12 @@ class ProfilePage extends StatelessWidget {
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(12),
-          border: color == Colors.white
-              ? Border.all(color: Colors.grey.shade300)
-              : null,
           boxShadow: [
-            if (color == Colors.white)
-              BoxShadow(
-                color: Colors.grey.shade200,
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
           ],
         ),
         child: Row(
@@ -170,7 +197,7 @@ class ProfilePage extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16,
                   color: textColor,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),

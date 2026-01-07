@@ -13,7 +13,7 @@ class Question {
 
   List<String> getShuffledAnswers() {
     final allAnswers = [correctAnswer, ...wrongAnswers];
-    allAnswers.shuffle(Random());
+    allAnswers.shuffle(Random()); // trộn
     return allAnswers;
   }
 

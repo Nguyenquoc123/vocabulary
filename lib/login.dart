@@ -12,35 +12,46 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final _formKey = GlobalKey<FormState>();
+  final _formKey = GlobalKey<FormState>(); // 
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
 
   bool _obscurePassword = true;
 
-  void loginUser() async {
+  void loginUser() async { // click login
     final result = await callApi.login(
       email: _emailCtrl.text,
       password: _passwordCtrl.text,
     );
 
-    if (result["status"] == true) {
+    if (result["success"] == true) { // thông tin đúng
       await User.saveUserData(
         token: result["token"],
-        userId: int.parse(result["user"]["id"].toString()),
+        userId: int.parse(result["user"]["user_id"].toString()),
         fullName: result["user"]["full_name"],
         email: result["user"]["email"],
       );
-      print("Đăng nhập thành công: ${result['user']['full_name']}");
+      
       // qua trang home
       Navigator.push(context, MaterialPageRoute(builder: (context) => Home()));
-    } else {
-      print("Sai thông tin: ${result["message"]}");
+    } else { // thông tin sai
+      String message = result["message"];
+      ScaffoldMessenger.of(context).showSnackBar( // thông báo lỗi
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(
+            message,
+            style: TextStyle(color: Colors.white),
+          ),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
   @override
-  void dispose() {
+  void dispose() { // giải phóng bộ nhớ
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
     super.dispose();
@@ -54,7 +65,7 @@ class _LoginPageState extends State<LoginPage> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
+            constraints: const BoxConstraints(maxWidth: 360), // giới hạn độ rộng
             child: Form(
               key: _formKey,
               child: Column(
@@ -68,7 +79,7 @@ class _LoginPageState extends State<LoginPage> {
                       color: const Color(0x3339b2ef),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Icon(
+                    child: const Icon( // icon giao diện login
                       Icons.translate,
                       size: 40,
                       color: Color(0xff39b2ef),
@@ -157,7 +168,7 @@ class _LoginPageState extends State<LoginPage> {
 
                       TextFormField(
                         controller: _passwordCtrl,
-                        obscureText: _obscurePassword,
+                        obscureText: _obscurePassword, // ẩn hiện ký tự
                         decoration: InputDecoration(
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
@@ -194,24 +205,7 @@ class _LoginPageState extends State<LoginPage> {
                     ],
                   ),
 
-                  const SizedBox(height: 8),
-
-                  // Forgot password
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () {},
-                      child: const Text(
-                        "Quên mật khẩu?",
-                        style: TextStyle(
-                          color: Color(0xff39b2ef),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 24),
 
                   // Login button
                   SizedBox(

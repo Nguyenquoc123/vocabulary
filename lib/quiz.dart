@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'dart:math';
-
 import 'package:studyvocabulary/model/question.dart';
+import 'package:studyvocabulary/model/user.dart';
 import 'package:studyvocabulary/service/api.dart';
 
 class QuizPage extends StatefulWidget {
@@ -23,27 +22,44 @@ class _QuizPageState extends State<QuizPage> {
   String? selectedAnswer;
   late List<String> shuffledAnswers;
 
-  Future<void> loadQuestions() async {
-    print(widget.lessonId);
-    print('Con gà nè=====================================');
+  // 1. Khai báo biến lưu trữ điểm số
+  int score = 0;
+
+  Future<void> loadQuestions() async {// load câu hỏi
     questions = await callApi.getQuestions(widget.lessonId);
     setState(() {
       loading = false;
     });
-    _shuffleCurrentQuestion();
+    _shuffleCurrentQuestion(); // trộn đáp án
+  }
+
+  Future<void> luuDiem(int lessonId, int score) async { // lưu điểm
+    final userId = await User.getUserId();
+    if (userId == null) return;
+    final success = await callApi.saveScore(
+      userId: userId,
+      lessonId: lessonId,
+      score: score,
+    );
+
+    if (success) {
+      print("Lưu điểm thành công");
+    } else {
+      print("Lưu điểm thất bại");
+    }
   }
 
   @override
-  void initState() {
+  void initState() { // chạy lần đầu
     super.initState();
     loadQuestions();
   }
 
-  void _shuffleCurrentQuestion() {
+  void _shuffleCurrentQuestion() { // trộn câu hỏi
     shuffledAnswers = questions[currentIndex].getShuffledAnswers();
   }
 
-  void nextQuestion() {
+  void nextQuestion() { // qua câu hỏi tiếp theo
     if (currentIndex < questions.length - 1) {
       setState(() {
         currentIndex++;
@@ -52,43 +68,61 @@ class _QuizPageState extends State<QuizPage> {
         _shuffleCurrentQuestion();
       });
     } else {
-      showDialog(
-        context: context, // context của page gốc
-        barrierDismissible: false,
-        builder: (dialogContext) => AlertDialog(
-          backgroundColor: const Color.fromARGB(255, 255, 192, 19),
-          title: const Text(
-            "Hoàn thành!",
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: const Text(
-            "Bạn đã hoàn thành bài học!",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-          actions: [
-            TextButton(
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.white, // màu chữ
-                backgroundColor: Colors.blue, // màu nền
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12), // bo cong
+      luuDiem(widget.lessonId, score); // lưu điểm
+      
+      showDialog( // thông báo
+        context: context,
+        builder: (dialog) => AlertDialog(
+          backgroundColor: const Color.fromARGB(255, 0, 255, 76),
+
+          title: Icon(Icons.emoji_events, size: 60, color: Colors.white),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Hoàn thành!",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 24,
                 ),
               ),
-              onPressed: () {
-                Navigator.of(dialogContext).pop(); // đóng dialog
-                Navigator.of(context).pop(); // quay về trang danh sách lesson
-              },
-              child: const Text(
-                "Đóng",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              SizedBox(height: 8),
+              Text(
+                "Nhận được $score điểm.",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            Center(
+              child: TextButton(
+                onPressed: () {
+                  Navigator.of(dialog).pop();
+                  Navigator.of(context).pop(true);
+                },
+                style: TextButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  "Đóng",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
           ],
@@ -97,32 +131,53 @@ class _QuizPageState extends State<QuizPage> {
     }
   }
 
-  void selectAnswer(String ans, Question question) {
-    if (answered) return;
+  void selectAnswer(String ans, Question question) {// check đáp án
+    if (answered) return;// đã trả lời
 
     setState(() {
       selectedAnswer = ans;
       answered = true;
+
+      // 
+      if (ans == question.correctAnswer) {
+        score += 10;
+      }
     });
 
-    Timer(const Duration(milliseconds: 500), () {
+    Timer(const Duration(milliseconds: 800), () { // chờ qua câu tiếp theo
       nextQuestion();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (loading) {
+    if (loading) { // đang load
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    final question = questions[currentIndex];
+    final question = questions[currentIndex]; 
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text("Question ${currentIndex + 1}/${questions.length}"),
+        title: Text("Câu hỏi ${currentIndex + 1}/${questions.length}"),
+        centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
+        
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Center(
+              child: Text(
+                "Score: $score",
+                style: const TextStyle(
+                  color: Colors.orange,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -130,61 +185,62 @@ class _QuizPageState extends State<QuizPage> {
           children: [
             LinearProgressIndicator(
               value: (currentIndex + (answered ? 1 : 0)) / questions.length,
+              backgroundColor: Colors.grey[200],
+              color: Colors.green,
+              minHeight: 8,
             ),
 
             const SizedBox(height: 34),
 
-            // Căn giữa nội dung bằng Expanded
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Câu hỏi căn giữa
-                  Text(
+                  const Text(
                     "Chọn đáp án đúng?",
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
                   ),
-                  SizedBox(height: 10),
+                  const SizedBox(height: 10),
                   Text(
                     question.questionText,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      fontSize: 28,
+                      fontSize: 32,
                       fontWeight: FontWeight.bold,
-                      color: Colors.red
+                      color: Colors.red,
                     ),
                   ),
 
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 40),
 
-                  // Danh sách đáp án cũng căn giữa
                   ...shuffledAnswers.map((ans) {
                     Color? buttonColor;
                     if (answered) {
                       if (ans == question.correctAnswer) {
-                        buttonColor = const Color.fromARGB(255, 0, 255, 13);
-                      } else if (ans == selectedAnswer &&
-                          ans != question.correctAnswer) {
-                        buttonColor = const Color.fromARGB(255, 255, 0, 0);
+                        buttonColor = Colors.green;
+                      } else if (ans == selectedAnswer) {
+                        buttonColor = Colors.red;
                       }
                     }
 
                     return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
                       child: ElevatedButton(
                         onPressed: () => selectAnswer(ans, question),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: buttonColor ?? Colors.orange,
-                          minimumSize: const Size.fromHeight(56),
+                          minimumSize: const Size.fromHeight(60),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
                         ),
                         child: Text(
                           ans,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.white, fontSize: 18),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                          ),
                         ),
                       ),
                     );
@@ -195,18 +251,12 @@ class _QuizPageState extends State<QuizPage> {
 
             const SizedBox(height: 16),
 
-            // Nút Skip
-            ElevatedButton(
+            TextButton(
               onPressed: nextQuestion,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color.fromARGB(255, 0, 204, 255),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 38,
-                  vertical: 20,
-                ),
+              child: const Text(
+                "Bỏ qua câu này",
+                style: TextStyle(color: Colors.grey),
               ),
-              child: const Text("Skip"),
             ),
           ],
         ),
